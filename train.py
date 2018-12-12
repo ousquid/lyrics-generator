@@ -11,8 +11,7 @@ from seq2seq import SimpleSeq2Seq, Seq2Seq, AttentionSeq2Seq
 import numpy as np
 import pickle
 
-def lyrics_dataset(distributes, input_dir, input_length=5, 
-        output_length=100, dist_path='./jawiki.all_vectors.100d.txt'):
+def lyrics_dataset(distributes, input_dir, input_length=5, output_length=5, iteration=50):
 
     x_vecs_list = list() 
     y_vecs_list = list()
@@ -22,17 +21,19 @@ def lyrics_dataset(distributes, input_dir, input_length=5,
             # dist_vecs:(items, 100)
             dist_vecs = \
                 np.array([distributes.get_vector(word) 
-                    if word in distributes.vocab.keys() else distributes.get_vector("トークン") \
+                    if word in distributes.vocab.keys() else distributes.get_vector("?") \
                         for word in f.read().strip().split()])
             
-            # x_vecs:(input_length, 100)
-            x_vecs = dist_vecs[:input_length, :]
-            # y_vecs:(output_length, 100)
-            y_vecs = dist_vecs[:output_length, :]
+            iter_num = max(min(len(dist_vecs)-input_length-output_length, iteration), 0)
+            for i in range(iter_num):
+                # x_vecs:(input_length, 100)
+                x_vecs = dist_vecs[i:i+input_length, :]
+                # y_vecs:(output_length, 100)
+                y_vecs = dist_vecs[i+input_length:i+input_length+output_length, :]
         
-            x_vecs_list.append(x_vecs)
-            y_vecs_list.append(y_vecs)
-                
+                x_vecs_list.append(x_vecs)
+                y_vecs_list.append(y_vecs)
+
     # x_vecs_list:(samples, input_length, 100)
     x_arr = np.array(x_vecs_list)
     # y_vecs_list:(samples, output_length, 100)
@@ -59,13 +60,16 @@ def train(x_train, y_train, epoch_num, hidden_dim=24, depth_num=1):
 
 if __name__=="__main__":
     if len(sys.argv)<6:
-        print("usage: {} input_dir output_model epoch_num  input_length output_length".format(sys.argv[0]))
+        print("usage: {} input_dir output_model epoch_num  input_length output_length iteration".format(sys.argv[0]))
+        exit()
     input_dir = sys.argv[1]
     model_path = sys.argv[2]
     epoch_num = int(sys.argv[3])
     input_length = int(sys.argv[4])
     output_length = int(sys.argv[5])
-
+    iteration = int(sys.argv[6])
+    
+    dist_path='./jawiki.all_vectors.100d.txt'
     if not os.path.exists("tmp.pkl"):
         distributes = KeyedVectors.load_word2vec_format(dist_path)
         with open("tmp.pkl", "wb") as f:
@@ -75,7 +79,7 @@ if __name__=="__main__":
             distributes = pickle.load(f)
 
     x_train, x_test, y_train, y_test = \
-        lyrics_dataset(distributes, input_dir, input_length=input_length, output_length=output_length)
+        lyrics_dataset(distributes, input_dir, input_length=input_length, output_length=output_length, iteration=iteration)
     print(x_train.shape)
     print(y_train.shape)
     model = train(x_train, y_train, epoch_num)
