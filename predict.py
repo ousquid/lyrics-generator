@@ -2,6 +2,7 @@ import sys
 import os
 import MeCab
 import numpy
+import argparse
 
 from keras.models import Model
 from keras.models import load_model
@@ -38,33 +39,34 @@ def get_distribute_vector(distributes, input_text):
 
 
 if __name__=="__main__":
-    if len(sys.argv)<3:
-        print("usage: {} input_model input_text".format(sys.argv[0]))
-        exit()
-    input_model = sys.argv[1]
-    input_text = sys.argv[2]
-    
-    dist_path='./jawiki.all_vectors.100d.txt'
+    parser = argparse.ArgumentParser(description='Seq2Seq Predict.')
+    parser.add_argument('input_model', type=str)
+    parser.add_argument('input_text', type=str)
+    parser.add_argument('-i', '--iter', type=int, default=10)
+    parser.add_argument('--dist_path', type=str, default='./jawiki.all_vectors.100d.txt')
+    args = parser.parse_args()
+        
     if not os.path.exists("tmp.pkl"):
-        distributes = KeyedVectors.load_word2vec_format(dist_path)
+        distributes = KeyedVectors.load_word2vec_format(args.dist_path)
         with open("tmp.pkl", "wb") as f:
             pickle.dump(distributes, f)
     else:
         with open("tmp.pkl", "rb") as f:
             distributes = pickle.load(f)
 
-    dist_vec = get_distribute_vector(distributes, input_text)
+    middle_dim, depth_num, _, input_length, output_length, _ = [int(i) for i in args.input_model.split(".")[:-1]]
+    dist_vec = get_distribute_vector(distributes, args.input_text)[:input_length, :]
     
-    hidden_dim=512
-    depth_num=3
     input_dim = 100
     output_dim = 100
     model = AttentionSeq2Seq(
         input_shape=(input_length, input_dim), depth=depth_num,
-        output_dim=output_dim, hidden_dim=hidden_dim, output_length=output_length)
+        output_dim=output_dim, hidden_dim=middle_dim, output_length=output_length)
 
     model.compile(loss='mse', optimizer="rmsprop")
-    model.load_weights(input_model)
-    y_pred = model.predict(numpy.array([dist_vec]))
-    for i in y_pred[0]:
-        print(distributes.similar_by_vector(i, topn=1)[0][0], end=" ")
+    model.load_weights(args.input_model)
+    y_pred = numpy.array([dist_vec])
+    for i in range(args.iter):
+        y_pred = model.predict(y_pred[:,-input_length:,:])
+        for j in y_pred[0]:
+            print(distributes.similar_by_vector(j, topn=1)[0][0], end=" ")

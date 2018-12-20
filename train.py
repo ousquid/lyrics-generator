@@ -1,5 +1,6 @@
 import sys
 import os
+import argparse
 
 from keras.models import Model
 from keras.layers import Input
@@ -11,7 +12,7 @@ from seq2seq import SimpleSeq2Seq, Seq2Seq, AttentionSeq2Seq
 import numpy as np
 import pickle
 
-def lyrics_dataset(distributes, input_dir, input_length=5, output_length=5, iteration=50):
+def lyrics_dataset(distributes, input_dir, input_length, output_length, iteration):
 
     x_vecs_list = list() 
     y_vecs_list = list()
@@ -42,7 +43,7 @@ def lyrics_dataset(distributes, input_dir, input_length=5, output_length=5, iter
     return train_test_split(x_arr, y_arr, test_size=0.0, random_state=0)
 
 
-def train(x_train, y_train, epoch_num, hidden_dim=24, depth_num=1):
+def train(x_train, y_train, epoch_num, hidden_dim, depth_num):
     input_length = x_train.shape[1]
     output_length = y_train.shape[1]
     
@@ -59,19 +60,23 @@ def train(x_train, y_train, epoch_num, hidden_dim=24, depth_num=1):
     return model
 
 if __name__=="__main__":
-    if len(sys.argv)<6:
-        print("usage: {} input_dir output_model epoch_num  input_length output_length iteration".format(sys.argv[0]))
-        exit()
-    input_dir = sys.argv[1]
-    model_path = sys.argv[2]
-    epoch_num = int(sys.argv[3])
-    input_length = int(sys.argv[4])
-    output_length = int(sys.argv[5])
-    iteration = int(sys.argv[6])
+    parser = argparse.ArgumentParser(description='Seq2Seq Train.')
+    parser.add_argument('input_dir', type=str)
+    parser.add_argument('-e', '--epoch_num', type=int, default=10)
+    parser.add_argument('-i', '--input_length', type=int, default=5)
+    parser.add_argument('-o', '--output_length', type=int, default=5)
+    parser.add_argument('-l', '--iter_limit', type=int, default=50)
+    parser.add_argument('-m', '--middle_dim', type=int, default=512)
+    parser.add_argument('-d', '--depth_num', type=int, default=4)
+    parser.add_argument('--dist_path', type=str, default='./jawiki.all_vectors.100d.txt')
+    args = parser.parse_args()
+
+    model_path = "{}.{}.{}.{}.{}.{}.model".format(
+        args.middle_dim, args.depth_num, args.epoch_num, 
+        args.input_length, args.output_length, args.iter_limit)
     
-    dist_path='./jawiki.all_vectors.100d.txt'
     if not os.path.exists("tmp.pkl"):
-        distributes = KeyedVectors.load_word2vec_format(dist_path)
+        distributes = KeyedVectors.load_word2vec_format(args.dist_path)
         with open("tmp.pkl", "wb") as f:
             pickle.dump(distributes, f)
     else:
@@ -79,10 +84,10 @@ if __name__=="__main__":
             distributes = pickle.load(f)
 
     x_train, x_test, y_train, y_test = \
-        lyrics_dataset(distributes, input_dir, input_length=input_length, output_length=output_length, iteration=iteration)
-    print(x_train.shape)
-    print(y_train.shape)
-    model = train(x_train, y_train, epoch_num)
+        lyrics_dataset(distributes, args.input_dir, input_length=args.input_length, 
+        output_length=args.output_length, iteration=args.iter_limit)
+    
+    model = train(x_train, y_train, args.epoch_num, args.middle_dim, args.depth_num)
     model.save(model_path)
     model.evaluate(x_test, y_test)
     
